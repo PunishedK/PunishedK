@@ -20,7 +20,7 @@ IT student from Vietnam. I enjoy building backend services, working with databas
 ### GitHub
 
 <!-- STATS_START -->
-**Pull requests:** `—` &nbsp;·&nbsp; **Merged:** `—` &nbsp;·&nbsp; **Public repos:** `—`
+**Pull requests:** `12` &nbsp;·&nbsp; **Merged:** `9` &nbsp;·&nbsp; **Public repos:** `1`
 <!-- STATS_END -->
 
 <sub>Counts are fetched from the GitHub API using the workflow token.</sub>
