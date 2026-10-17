@@ -1,0 +1,102 @@
+name: Profile Sync
+
+on:
+  # Runs after first upload, so the real snake is generated automatically.
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - .github/workflows/profile.yml
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: profile-sync
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout profile repository
+        uses: actions/checkout@v4
+
+      - name: Generate real contribution snake
+        uses: Platane/snk/svg-only@v3
+        with:
+          github_user_name: PunishedK
+          outputs: |
+            assets/snake.svg?palette=github-light
+            assets/snake-dark.svg?palette=github-dark
+
+      - name: Update PR and repository counts from GitHub API
+        env:
+          GH_API_TOKEN: ${{ secrets.PROFILE_STATS_TOKEN || github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          user = 'PunishedK'
+          token = os.environ['GH_API_TOKEN']
+
+          def get(endpoint):
+              req = Request(
+                  'https://api.github.com' + endpoint,
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'github-profile-sync',
+                  },
+              )
+              with urlopen(req, timeout=25) as resp:
+                  return json.load(resp)
+
+          def count(query):
+              data = get('/search/issues?' + urlencode({'q': query, 'per_page': 1}))
+              if data.get('incomplete_results'):
+                  raise RuntimeError('GitHub search incomplete; keeping old numbers')
+              return int(data['total_count'])
+
+          prs = count(f'is:pr author:{user}')
+          merged = count(f'is:pr author:{user} is:merged')
+          repos = int(get(f'/users/{user}')['public_repos'])
+          if merged > prs:
+              raise RuntimeError('Inconsistent PR counts; keeping old numbers')
+
+          path = Path('README.md')
+          text = path.read_text(encoding='utf-8')
+          pattern = r'(?s)(<!-- STATS_START -->\n).*?(\n<!-- STATS_END -->)'
+          line = (f'**Pull requests:** `{prs}` &nbsp;·&nbsp; '
+                  f'**Merged:** `{merged}` &nbsp;·&nbsp; '
+                  f'**Public repos:** `{repos}`')
+          if len(re.findall(pattern, text)) != 1:
+              raise RuntimeError('Missing or duplicated README stats markers')
+          updated = re.sub(pattern, lambda m: m.group(1) + line + m.group(2), text)
+          if updated != text:
+              path.write_text(updated, encoding='utf-8')
+          print(f'Visible PRs: {prs}; merged: {merged}; public repos: {repos}')
+          PY
+
+      - name: Commit only when generated files change
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md assets/snake.svg assets/snake-dark.svg
+          if git diff --cached --quiet; then
+            echo 'Nothing changed, no commit created.'
+          else
+            git commit -m 'chore(profile): sync real GitHub data'
+            git push origin HEAD:main
+          fi
