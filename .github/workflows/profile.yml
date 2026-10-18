@@ -8,10 +8,6 @@ on:
     branches: [main]
     paths:
       - README.md
-      - 'assets/portrait.*'
-      - dark_mode.svg
-      - light_mode.svg
-      - scripts/update_profile.py
       - .github/workflows/profile.yml
 
 permissions:
@@ -37,15 +33,15 @@ jobs:
             assets/snake.svg?palette=github-light
             assets/snake-dark.svg?palette=github-dark
 
-      - name: Commit only changed generated files
+      - name: Commit generated snake only if changed
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add dark_mode.svg light_mode.svg assets/snake.svg assets/snake-dark.svg
+          git add assets/snake.svg assets/snake-dark.svg
           if git diff --cached --quiet; then
             echo 'No changes, skipping commit.'
           else
-            git commit -m 'chore(profile): sync ASCII portrait and snake'
+            git commit -m 'chore(profile): sync contribution snake'
             git push origin HEAD:main
           fi
