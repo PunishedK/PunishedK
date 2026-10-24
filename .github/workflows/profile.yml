@@ -3,12 +3,14 @@ name: Profile Sync
 on:
   workflow_dispatch:
   schedule:
-  - cron: '17 */6 * * *'
+    - cron: '17 */6 * * *'
   push:
     branches: [main]
     paths:
       - README.md
       - .github/workflows/profile.yml
+      - scripts/update_profile_stats.py
+      - scripts/ensure_stats_section.py
 
 permissions:
   contents: write
@@ -25,6 +27,18 @@ jobs:
       - name: Check out profile repository
         uses: actions/checkout@v4
 
+      - name: Verify stats generation logic
+        run: python3 -m unittest discover -s tests -p 'test_profile_stats.py' -v
+
+      - name: Update profile statistics from real GitHub data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PROFILE_USERNAME: PunishedK
+        run: python3 scripts/update_profile_stats.py
+
+      - name: Insert statistics into README without replacing existing design
+        run: python3 scripts/ensure_stats_section.py
+
       - name: Generate contribution snake
         uses: Platane/snk/svg-only@v3
         with:
@@ -33,15 +47,15 @@ jobs:
             assets/snake.svg?palette=github-light
             assets/snake-dark.svg?palette=github-dark
 
-      - name: Commit generated snake only if changed
+      - name: Commit updated stats and snake only when changed
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets/snake.svg assets/snake-dark.svg
+          git add README.md assets/profile-stats-light.svg assets/profile-stats-dark.svg assets/snake.svg assets/snake-dark.svg
           if git diff --cached --quiet; then
-            echo 'No changes, skipping commit.'
+            echo 'Real GitHub data unchanged; skip commit.'
           else
-            git commit -m 'chore(profile): sync contribution snake'
+            git commit -m 'chore(profile): sync real GitHub statistics and snake'
             git push origin HEAD:main
           fi
