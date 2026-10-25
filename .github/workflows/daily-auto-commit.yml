@@ -1,0 +1,56 @@
+name: Daily Auto Commit
+
+on:
+  schedule:
+    # 07:17 AM Vietnam time (UTC+7)
+    - cron: '17 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: profile-daily-auto-commit
+  cancel-in-progress: false
+
+jobs:
+  daily-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout profile repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Create daily keepalive commit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Commit under the profile owner's GitHub noreply identity.
+          git config user.name 'PunishedK'
+          git config user.email '166216701+PunishedK@users.noreply.github.com'
+
+          date -u '+Last update (UTC): %Y-%m-%dT%H:%M:%SZ' > .keepalive
+          git add .keepalive
+
+          if git diff --cached --quiet; then
+            echo 'No change to commit.'
+            exit 0
+          fi
+
+          git commit -m 'chore(profile): daily keepalive [skip ci]'
+
+          # Another profile workflow may update main at the same time.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo 'Daily commit pushed successfully.'
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; rebasing onto latest main..."
+            git fetch origin main
+            git rebase origin/main
+          done
+
+          echo 'Could not push daily commit after three attempts.' >&2
+          exit 1
